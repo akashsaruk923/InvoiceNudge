@@ -21,6 +21,9 @@ COPY --from=build /app ./
 # Hosts inject PORT; bind to it (fall back to 8080).
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080
+# Container hosts (Render, Fly) cap inotify instances low; config-file watching then
+# throws IOException at startup. We don't hot-reload config in prod, so turn it off.
+ENV DOTNET_hostBuilder__reloadConfigOnChange=false
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "InvoiceNudge.Web.dll"]
