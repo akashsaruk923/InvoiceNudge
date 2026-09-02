@@ -25,6 +25,8 @@ services:
           property: connectionString
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      - key: DOTNET_hostBuilder__reloadConfigOnChange
+        value: "false"
       # Secret guarding POST /internal/dispatch-reminders (external reminder cron).
       - key: Reminders__DispatchSecret
         generateValue: true
