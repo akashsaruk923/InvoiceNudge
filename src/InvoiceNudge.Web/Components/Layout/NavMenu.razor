@@ -1,0 +1,38 @@
+﻿<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">InvoiceNudge</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="invoices">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Invoices
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="clients">
+                <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Clients
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="px-3 py-2 mt-auto small text-white-50">
+            <div class="mb-1">@context.User.Identity?.Name</div>
+            <form action="auth/logout" method="post">
+                <button type="submit" class="btn btn-sm btn-outline-light">Sign out</button>
+            </form>
+        </div>
+    </Authorized>
+</AuthorizeView>

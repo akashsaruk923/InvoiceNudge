@@ -1,0 +1,118 @@
+@page "/clients"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject CurrentUser CurrentUser
+@inject ClientService ClientSvc
+
+<PageTitle>Clients · InvoiceNudge</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Clients</h1>
+    <button class="btn btn-primary" @onclick="() => _showForm = !_showForm">Add client</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_showForm)
+{
+    <div class="card mb-4"><div class="card-body">
+        <EditForm Model="_form" OnValidSubmit="AddAsync">
+            <DataAnnotationsValidator />
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Name</label>
+                    <InputText class="form-control" @bind-Value="_form.Name" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Contact email</label>
+                    <InputText class="form-control" @bind-Value="_form.ContactEmail" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Phone (optional)</label>
+                    <InputText class="form-control" @bind-Value="_form.ContactPhone" />
+                </div>
+            </div>
+            <button class="btn btn-primary mt-3" type="submit">Save</button>
+        </EditForm>
+    </div></div>
+}
+
+@if (_clients is null)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_clients.Count == 0)
+{
+    <p class="text-muted">No clients yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var c in _clients)
+        {
+            <tr>
+                <td>@c.Name</td>
+                <td>@c.ContactEmail</td>
+                <td>@(c.ContactPhone ?? "—")</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => ArchiveAsync(c.Id)">Archive</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Client>? _clients;
+    private bool _showForm;
+    private string? _error;
+    private readonly ClientForm _form = new();
+
+    private Guid _userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = await CurrentUser.RequireIdAsync();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync() => _clients = await ClientSvc.ListAsync(_userId);
+
+    private async Task AddAsync()
+    {
+        _error = null;
+        var result = await ClientSvc.CreateAsync(_userId,
+            new CreateClientRequest(_form.Name, _form.ContactEmail, _form.ContactPhone));
+        if (!result.Succeeded)
+        {
+            _error = result.Error;
+            return;
+        }
+        _form.Name = _form.ContactEmail = string.Empty;
+        _form.ContactPhone = null;
+        _showForm = false;
+        await ReloadAsync();
+    }
+
+    private async Task ArchiveAsync(Guid id)
+    {
+        var result = await ClientSvc.ArchiveAsync(_userId, id);
+        if (!result.Succeeded) _error = result.Error;
+        await ReloadAsync();
+    }
+
+    private sealed class ClientForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Name { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress]
+        public string ContactEmail { get; set; } = string.Empty;
+        public string? ContactPhone { get; set; }
+    }
+}

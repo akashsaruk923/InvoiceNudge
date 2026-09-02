@@ -1,0 +1,193 @@
+@page "/invoices"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject CurrentUser CurrentUser
+@inject InvoiceService InvoiceSvc
+@inject ClientService ClientSvc
+
+<PageTitle>Invoices · InvoiceNudge</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Invoices</h1>
+    <button class="btn btn-primary" @onclick="ToggleForm" disabled="@(_clients is { Count: 0 })">Add invoice</button>
+</div>
+
+@if (_clients is { Count: 0 })
+{
+    <div class="alert alert-info">Add a client first, then you can create invoices for them.</div>
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_showForm && _clients is { Count: > 0 })
+{
+    <div class="card mb-4"><div class="card-body">
+        <EditForm Model="_form" OnValidSubmit="AddAsync">
+            <DataAnnotationsValidator />
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Client</label>
+                    <InputSelect class="form-select" @bind-Value="_form.ClientId">
+                        <option value="@Guid.Empty" disabled>Select…</option>
+                        @foreach (var c in _clients)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Invoice number</label>
+                    <InputText class="form-control" @bind-Value="_form.Number" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Amount</label>
+                    <InputNumber class="form-control" @bind-Value="_form.Amount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Currency</label>
+                    <InputText class="form-control" @bind-Value="_form.Currency" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Issue date</label>
+                    <InputDate class="form-control" @bind-Value="_form.IssueDate" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Due date</label>
+                    <InputDate class="form-control" @bind-Value="_form.DueDate" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Payment link (optional)</label>
+                    <InputText class="form-control" @bind-Value="_form.PaymentUrl" />
+                </div>
+            </div>
+            <button class="btn btn-primary mt-3" type="submit">Save</button>
+        </EditForm>
+    </div></div>
+}
+
+@if (_invoices is null)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_invoices.Count == 0)
+{
+    <p class="text-muted">No invoices yet.</p>
+}
+else
+{
+    <table class="table align-middle">
+        <thead><tr><th>Number</th><th>Client</th><th class="text-end">Amount</th><th>Due</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var i in _invoices)
+        {
+            <tr class="@(IsOverdue(i) ? "table-warning" : null)">
+                <td>@i.Number</td>
+                <td>@i.Client?.Name</td>
+                <td class="text-end">@ReminderTemplateModel.FormatMoney(i.AmountMinor, i.Currency)</td>
+                <td>@i.DueDateUtc.ToString("dd MMM yyyy")</td>
+                <td>
+                    <span class="badge bg-@StatusColor(i.Status)">@i.Status</span>
+                    @if (i.RemindersPaused) { <span class="badge bg-secondary ms-1">paused</span> }
+                </td>
+                <td class="text-end">
+                    @if (i.Status != InvoiceStatus.Paid)
+                    {
+                        <button class="btn btn-sm btn-success me-1" @onclick="() => MarkPaidAsync(i.Id)">Mark paid</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => TogglePauseAsync(i.Id, !i.RemindersPaused)">
+                            @(i.RemindersPaused ? "Resume" : "Pause")
+                        </button>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Invoice>? _invoices;
+    private List<Client>? _clients;
+    private bool _showForm;
+    private string? _error;
+    private readonly InvoiceForm _form = new();
+    private Guid _userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = await CurrentUser.RequireIdAsync();
+        _clients = await ClientSvc.ListAsync(_userId);
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync() => _invoices = await InvoiceSvc.ListAsync(_userId);
+
+    private void ToggleForm()
+    {
+        _showForm = !_showForm;
+        if (_showForm && _clients is { Count: > 0 })
+            _form.ClientId = _clients[0].Id;
+    }
+
+    private bool IsOverdue(Invoice i) =>
+        i.Status != InvoiceStatus.Paid && i.Status != InvoiceStatus.WrittenOff && i.DueDateUtc < DateTime.UtcNow;
+
+    private static string StatusColor(InvoiceStatus s) => s switch
+    {
+        InvoiceStatus.Paid => "success",
+        InvoiceStatus.WrittenOff => "dark",
+        InvoiceStatus.PartiallyPaid => "info",
+        _ => "primary"
+    };
+
+    private async Task AddAsync()
+    {
+        _error = null;
+        var req = new CreateInvoiceRequest(
+            _form.ClientId, _form.Number, _form.Amount, _form.Currency,
+            DateTime.SpecifyKind(_form.IssueDate.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc),
+            DateTime.SpecifyKind(_form.DueDate.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc),
+            _form.PaymentUrl, null);
+
+        var result = await InvoiceSvc.CreateAsync(_userId, req);
+        if (!result.Succeeded)
+        {
+            _error = result.Error;
+            return;
+        }
+        _form.Number = string.Empty;
+        _form.Amount = 0;
+        _form.PaymentUrl = null;
+        _showForm = false;
+        await ReloadAsync();
+    }
+
+    private async Task MarkPaidAsync(Guid id)
+    {
+        var r = await InvoiceSvc.MarkPaidAsync(_userId, id);
+        if (!r.Succeeded) _error = r.Error;
+        await ReloadAsync();
+    }
+
+    private async Task TogglePauseAsync(Guid id, bool paused)
+    {
+        var r = await InvoiceSvc.SetRemindersPausedAsync(_userId, id, paused);
+        if (!r.Succeeded) _error = r.Error;
+        await ReloadAsync();
+    }
+
+    private sealed class InvoiceForm
+    {
+        public Guid ClientId { get; set; }
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Number { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Range(0.01, 100_000_000)]
+        public decimal Amount { get; set; }
+        public string Currency { get; set; } = "INR";
+        public DateOnly IssueDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly DueDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(15));
+        public string? PaymentUrl { get; set; }
+    }
+}

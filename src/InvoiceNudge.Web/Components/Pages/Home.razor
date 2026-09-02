@@ -1,0 +1,63 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject CurrentUser CurrentUser
+@inject DashboardService Dashboard
+
+<PageTitle>Dashboard · InvoiceNudge</PageTitle>
+
+<h1 class="h3 mb-4">Dashboard</h1>
+
+@if (_stats is null)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">Outstanding</div>
+                <div class="fs-4 fw-semibold">@Money(_stats.OutstandingMinor)</div>
+                <div class="text-muted small">@_stats.OpenInvoiceCount open invoice(s)</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card h-100 border-danger-subtle"><div class="card-body">
+                <div class="text-muted small text-uppercase">Overdue</div>
+                <div class="fs-4 fw-semibold text-danger">@Money(_stats.OverdueMinor)</div>
+                <div class="text-muted small">@_stats.OverdueInvoiceCount invoice(s)</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">Collected (30d)</div>
+                <div class="fs-4 fw-semibold text-success">@Money(_stats.CollectedLast30DaysMinor)</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">Avg days to pay</div>
+                <div class="fs-4 fw-semibold">@(_stats.AverageDaysToPayment?.ToString("0.0") ?? "—")</div>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="alert alert-light border">
+        <strong>How reminders work:</strong> once an invoice is added, InvoiceNudge emails the client
+        automatically — 3 days before the due date, on the due date, and again at 7 and 14 days overdue —
+        until it's marked paid.
+    </div>
+}
+
+@code {
+    private DashboardStats? _stats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await CurrentUser.RequireIdAsync();
+        _stats = await Dashboard.GetAsync(userId);
+    }
+
+    private string Money(long minor) => ReminderTemplateModel.FormatMoney(minor, _stats?.Currency ?? "INR");
+}

@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/*.user
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.git/
+.github/
+**/appsettings.Development.json
+**/node_modules/
+README.md

@@ -1,0 +1,21 @@
+name: Dispatch reminders
+
+# Backup trigger for the reminder pass, in case the in-process worker is asleep
+# (free hosts spin web services down when idle). Runs every 30 minutes.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit the dispatch endpoint
+        run: |
+          code=$(curl -s -o /tmp/out.json -w "%{http_code}" -X POST \
+            "${{ secrets.APP_BASE_URL }}/internal/dispatch-reminders" \
+            -H "X-Dispatch-Secret: ${{ secrets.DISPATCH_SECRET }}")
+          echo "HTTP $code"
+          cat /tmp/out.json || true
+          test "$code" = "200"
